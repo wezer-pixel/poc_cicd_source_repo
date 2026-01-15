@@ -2,54 +2,63 @@ pipeline {
   agent any
 
   environment {
-    APIM_UAT = "uat"
-    APIM_UAT_URL = "https://172.22.50.136:9443"
+    UAT_ENV   = 'uat'
+    UAT_APIM  = 'https://172.22.50.136:9443'
+    INSECURE  = '-k'
   }
 
   stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
 
-    stage('Init apictl env') {
+    stage('Configure apictl env (UAT)') {
       steps {
         sh '''
-          apictl add env ${APIM_UAT} --apim ${APIM_UAT_URL} || true
+          set -e
+          apictl add env ${UAT_ENV} --apim ${UAT_APIM} 2>/dev/null || true
+          apictl get envs | grep -q "^${UAT_ENV}$" || (echo "UAT env not added" && exit 1)
         '''
       }
     }
 
     stage('Login to UAT') {
       steps {
-        withCredentials([usernamePassword(
-          credentialsId: 'uat-apim-creds',
-          usernameVariable: 'UAT_USER',
-          passwordVariable: 'UAT_PASS'
+        withCredentials([usernamePassword(credentialsId: 'apim-uat-admin',
+          usernameVariable: 'APIM_USER',
+          passwordVariable: 'APIM_PASS'
         )]) {
           sh '''
-            echo "$UAT_PASS" | apictl login ${APIM_UAT} -u $UAT_USER --password-stdin -k
+            set -e
+            echo "$APIM_PASS" | apictl login ${UAT_ENV} -u "$APIM_USER" --password-stdin ${INSECURE}
           '''
         }
       }
     }
 
-    stage('Import API to UAT') {
+    stage('Import APIs to UAT') {
       steps {
         sh '''
-          apictl import api -f ColTrainScheduleCommunityAPI-1.0.0 \
-            -e ${APIM_UAT} \
-            --update \
-            --preserve-provider \
-            -k
+          set -e
+
+          # Import every API project folder that contains api.yaml
+          for d in */; do
+            if [ -f "${d}api.yaml" ]; then
+              echo "Importing API project: $d"
+              apictl import api -e ${UAT_ENV} -f "$d" ${INSECURE} --update --verbose
+            fi
+          done
         '''
       }
     }
 
-    stage('Deploy to Gateway') {
+    stage('Verify') {
       steps {
         sh '''
-          apictl deploy api -n ColTrainScheduleCommunityAPI \
-            -v 1.0.0 \
-            -e ${APIM_UAT} \
-            --gateway-environment Production \
-            -k
+          set -e
+          apictl get apis -e ${UAT_ENV} ${INSECURE}
         '''
       }
     }
