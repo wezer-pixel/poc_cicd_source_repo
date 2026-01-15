@@ -57,7 +57,7 @@ pipeline {
     stage('Login to UAT') {
       steps {
         withCredentials([usernamePassword(
-          credentialsId: 'apim-uat-admin',
+          credentialsId: 'uat-apim-creds',
           usernameVariable: 'APIM_USER',
           passwordVariable: 'APIM_PASS'
         )]) {
