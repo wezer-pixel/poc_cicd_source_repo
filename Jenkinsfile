@@ -25,6 +25,11 @@ pipeline {
         checkout scm
       }
     }
+    stage('Show branch') {
+      steps {
+        sh 'echo "BRANCH_NAME=$BRANCH_NAME"; git rev-parse --abbrev-ref HEAD; git branch -a'
+      }
+    }
 
     stage('Verify apictl installed') {
       steps {
