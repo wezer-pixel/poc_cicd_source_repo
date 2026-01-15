@@ -3,7 +3,7 @@ pipeline {
 
   options {
     timestamps()
-    ansiColor('xterm')
+    // (No ansiColor here to avoid the plugin error)
   }
 
   environment {
@@ -14,8 +14,8 @@ pipeline {
     // apictl flags
     INSECURE = '-k'
 
-    // Make apictl state local to this workspace (avoids /var/lib/jenkins cross-job clashes)
-    HOME = "${WORKSPACE}"
+    // Keep apictl state inside the job workspace so jobs don't clash
+    APICTL_HOME = "${WORKSPACE}/.apictl_home"
   }
 
   stages {
@@ -40,6 +40,8 @@ pipeline {
       steps {
         sh '''
           set -e
+          export HOME="${APICTL_HOME}"
+          mkdir -p "$HOME"
 
           # Add env if missing (safe to run every time)
           apictl add env ${UAT_ENV} --apim ${UAT_APIM} 2>/dev/null || true
@@ -47,7 +49,6 @@ pipeline {
           echo "Configured environments:"
           apictl get envs || true
 
-          # Basic sanity check
           apictl get envs | grep -qw "${UAT_ENV}" || (echo "UAT env '${UAT_ENV}' not present in apictl config" && exit 1)
         '''
       }
@@ -62,6 +63,9 @@ pipeline {
         )]) {
           sh '''
             set -e
+            export HOME="${APICTL_HOME}"
+            mkdir -p "$HOME"
+
             echo "$APIM_PASS" | apictl login ${UAT_ENV} -u "$APIM_USER" --password-stdin ${INSECURE} --verbose
           '''
         }
@@ -72,6 +76,8 @@ pipeline {
       steps {
         sh '''
           set -e
+          export HOME="${APICTL_HOME}"
+          mkdir -p "$HOME"
 
           found=0
 
@@ -98,6 +104,9 @@ pipeline {
       steps {
         sh '''
           set -e
+          export HOME="${APICTL_HOME}"
+          mkdir -p "$HOME"
+
           echo "APIs currently in UAT:"
           apictl get apis -e ${UAT_ENV} ${INSECURE} --verbose
         '''
@@ -108,10 +117,11 @@ pipeline {
   post {
     always {
       sh '''
-        echo "Workspace: $WORKSPACE"
-        echo "apictl config (if present):"
-        ls -lah "$HOME/.wso2apictl" 2>/dev/null || true
-        ls -lah "$HOME/.wso2apictl.local" 2>/dev/null || true
+        set +e
+        echo "Job workspace: $WORKSPACE"
+        echo "apictl HOME used: ${APICTL_HOME}"
+        ls -lah "${APICTL_HOME}/.wso2apictl" 2>/dev/null || true
+        ls -lah "${APICTL_HOME}/.wso2apictl.local" 2>/dev/null || true
       '''
     }
   }
