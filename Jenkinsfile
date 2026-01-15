@@ -2,58 +2,54 @@ pipeline {
   agent any
 
   environment {
-    APIM_ENV = "uat"
-    API_DIR  = "apis/ColTrainScheduleCommunityAPI/1.0.0"
+    APIM_UAT = "uat"
+    APIM_UAT_URL = "https://172.22.50.136:9443"
   }
 
   stages {
-    stage('Checkout') {
-      steps { checkout scm }
-    }
 
-    stage('apictl init env') {
+    stage('Init apictl env') {
       steps {
         sh '''
-          apictl add env uat --apim https://172.22.50.136:9443 || true
+          apictl add env ${APIM_UAT} --apim ${APIM_UAT_URL} || true
         '''
       }
     }
 
     stage('Login to UAT') {
       steps {
-        withCredentials([usernamePassword(credentialsId: 'apim-uat-creds',
-                         usernameVariable: 'UAT_USER',
-                         passwordVariable: 'UAT_PASS')]) {
+        withCredentials([usernamePassword(
+          credentialsId: 'uat-apim-creds',
+          usernameVariable: 'UAT_USER',
+          passwordVariable: 'UAT_PASS'
+        )]) {
           sh '''
-            apictl login uat -u "$UAT_USER" -p "$UAT_PASS" -k
+            echo "$UAT_PASS" | apictl login ${APIM_UAT} -u $UAT_USER --password-stdin -k
           '''
         }
       }
     }
 
-    stage('Import API Project to UAT') {
+    stage('Import API to UAT') {
       steps {
         sh '''
-          # --update is important for idempotency (import again updates existing API)
-          apictl import api -e uat -f "$API_DIR" -k --update
+          apictl import api -f ColTrainScheduleCommunityAPI-1.0.0 \
+            -e ${APIM_UAT} \
+            --update \
+            --preserve-provider \
+            -k
         '''
       }
     }
 
-    stage('Create & Deploy Revision (Gateway)') {
+    stage('Deploy to Gateway') {
       steps {
         sh '''
-          # Depending on your apictl version/APIM config, you typically:
-          # 1) create api revision
-          # 2) deploy it to a gateway environment
-
-          # If your apictl supports it, do something like:
-          # apictl create api revision -e uat -n ColTrainScheduleCommunityAPI -v 1.0.0 -k
-          # apictl deploy api revision -e uat -n ColTrainScheduleCommunityAPI -v 1.0.0 -k --target-gateway-env "Default"
-          #
-          # If your setup auto-deploys on import (some tutorial packs do), you can skip this stage.
-          #
-          apictl get apis -e uat -k
+          apictl deploy api -n ColTrainScheduleCommunityAPI \
+            -v 1.0.0 \
+            -e ${APIM_UAT} \
+            --gateway-environment Production \
+            -k
         '''
       }
     }
