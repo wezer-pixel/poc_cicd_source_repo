@@ -88,7 +88,7 @@ pipeline {
               echo "===================================================="
               echo "Importing API project: ${d}"
               echo "===================================================="
-              apictl import api -e ${UAT_ENV} -f "${d%/}" ${INSECURE} --update --preserve-provider --verbose
+              apictl import api -e ${UAT_ENV} -f "${d%/}" ${INSECURE} --update --preserve-provider --rotate-revision --verbose
             fi
           done
 
